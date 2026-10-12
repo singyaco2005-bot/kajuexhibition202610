@@ -230,6 +230,8 @@
 /* ================= 設定區 ================= */
 const CONFIG = {
   LIFF_ID: "1654296704-PW3pXZQX",        // ← 填入 LIFF ID，例如 "2001234567-AbCdEfGh"
+  // gosu LINE Login：讀取已登入使用者資料的 API（從 gosu 登入連結進來時使用）
+  GOSU_ME_URL: "https://1935.api.gosu.bar/oauth/line/logged",
   // 填寫完成後，以使用者身分傳到聊天室給 chatbot 的關鍵字（不分中日文，固定一個方便 chatbot 判斷）
   DONE_KEYWORD: "#菓樹問答完成",
   AUTO_CLOSE_MS: 1500   // 傳出關鍵字後幾毫秒自動關閉 LIFF，回到聊天室；0 = 不自動關
@@ -431,9 +433,37 @@ function setProfile(p) {
   profile.userId = p.userId || "";
   profile.displayName = p.displayName || "";
   profile.pictureUrl = p.pictureUrl || "";
+  profile.source = p.source || "";
+  profile.tag = p.tag || null;
+  profile.property = p.property || null;
   document.getElementById("displayName").textContent = profile.displayName || t("guest");
   const av = document.getElementById("avatar");
   if (profile.pictureUrl) av.src = profile.pictureUrl; else av.style.visibility = "hidden";
+}
+
+/* 從 gosu LINE Login 取得使用者資料；未登入或失敗回傳 null */
+async function fetchGosuProfile() {
+  if (!CONFIG.GOSU_ME_URL) return null;
+  try {
+    const res = await fetch(CONFIG.GOSU_ME_URL + location.search, { credentials: "include" });
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!d || d.status === false) return null;
+    const fp = d.from && d.from.profile;
+    const id = d.id != null ? d.id : (d.leId != null ? d.leId : (fp ? fp.id : null));
+    if (id == null && !d.name) return null;
+    return {
+      userId: id != null ? String(id) : "",
+      displayName: d.name || (fp && fp.name) || "",
+      pictureUrl: d.picture || (fp && fp.picture) || "",
+      source: "gosu",
+      tag: d.tag || null,
+      property: d.property || null
+    };
+  } catch (e) {
+    console.warn("gosu profile failed", e);
+    return null;
+  }
 }
 
 async function init() {
@@ -444,6 +474,19 @@ async function init() {
   lang = saved || (sys.startsWith("ja") ? "ja" : "zh");
   applyLang();
 
+  // 1) 先用 gosu LINE Login 的登入狀態取使用者資料
+  const gosu = await fetchGosuProfile();
+  if (gosu) {
+    setProfile(gosu);
+    // 若同時在 LIFF 內開啟，仍初始化 LIFF 以便完成後代傳關鍵字
+    if (CONFIG.LIFF_ID && typeof liff !== "undefined") {
+      try { await liff.init({ liffId: CONFIG.LIFF_ID }); } catch (e) { console.warn("LIFF init failed", e); }
+    }
+    show("page1");
+    return;
+  }
+
+  // 2) 沒有 gosu 登入狀態 → 改用 LIFF
   if (!CONFIG.LIFF_ID || typeof liff === "undefined") {
     setProfile({}); // 預覽模式
     show("page1");
