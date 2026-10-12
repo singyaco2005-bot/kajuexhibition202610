@@ -436,10 +436,27 @@ function setProfile(p) {
   profile.source = p.source || "";
   profile.tag = p.tag || null;
   profile.property = p.property || null;
+  profile.gosuId = p.gosuId || GOSU_ID || "";
+  window.kajuProfile = profile;
   document.getElementById("displayName").textContent = profile.displayName || t("guest");
   const av = document.getElementById("avatar");
   if (profile.pictureUrl) av.src = profile.pictureUrl; else av.style.visibility = "hidden";
 }
+
+/* 讀取 gosu 流程導回時帶的 gosuId（LIFF 首次開啟時會包在 liff.state 裡） */
+function readGosuId() {
+  let id = "";
+  try {
+    const sp = new URLSearchParams(location.search);
+    id = sp.get("gosuId") || "";
+    const st = sp.get("liff.state");
+    if (!id && st && st.indexOf("?") >= 0) id = new URLSearchParams(st.slice(st.indexOf("?") + 1)).get("gosuId") || "";
+    if (id) sessionStorage.setItem("kaju_gosuId", id);
+    else id = sessionStorage.getItem("kaju_gosuId") || "";
+  } catch (e) {}
+  return id;
+}
+const GOSU_ID = readGosuId();
 
 /* 從 gosu LINE Login 取得使用者資料；未登入或失敗回傳 null */
 async function fetchGosuProfile() {
@@ -456,6 +473,7 @@ async function fetchGosuProfile() {
       userId: id != null ? String(id) : "",
       displayName: d.name || (fp && fp.name) || "",
       pictureUrl: d.picture || (fp && fp.picture) || "",
+      gosuId: id != null ? String(id) : "",
       source: "gosu",
       tag: d.tag || null,
       property: d.property || null
