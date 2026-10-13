@@ -232,6 +232,8 @@ const CONFIG = {
   LIFF_ID: "1654296704-ve03OHtm",        // ← 填入 LIFF ID，例如 "2001234567-AbCdEfGh"
   // gosu LINE Login：讀取已登入使用者資料的 API（從 gosu 登入連結進來時使用）
   GOSU_ME_URL: "https://1935.api.gosu.bar/oauth/line/logged",
+  // 作答完成後 POST 回 gosu（自訂事件 POST），由 gosu 流程「設定屬性」貼標籤
+  GOSU_DONE_URL: "https://1935.api.gosu.bar/customize/kajuexhibition202610-done",
   // 填寫完成後，以使用者身分傳到聊天室給 chatbot 的關鍵字（不分中日文，固定一個方便 chatbot 判斷）
   DONE_KEYWORD: "#菓樹問答完成",
   AUTO_CLOSE_MS: 1500   // 傳出關鍵字後幾毫秒自動關閉 LIFF，回到聊天室；0 = 不自動關
@@ -411,7 +413,41 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
 
 /* ================= 通知 chatbot ================= */
 // 以使用者身分在聊天室送出關鍵字，chatbot 收到 webhook 後接續會員綁定／優惠券流程
+/* 作答完成 → POST 回 gosu 讓流程貼標籤（最多等 3 秒，失敗不影響後續） */
+async function postDoneToGosu() {
+  if (!CONFIG.GOSU_DONE_URL) return false;
+  const body = new URLSearchParams({
+    gosuId: profile.gosuId || GOSU_ID || "",
+    lineUserId: profile.userId || "",
+    name: profile.displayName || "",
+    lang: typeof lang !== "undefined" ? lang : "",
+    result: typeof doneState !== "undefined" ? doneState : "ok",
+    answers: JSON.stringify(typeof answers !== "undefined" ? answers : {}),
+    finishedAt: new Date().toISOString()
+  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    // 用 form-urlencoded（簡單請求，不觸發 CORS preflight）並帶上 gosu 登入 cookie
+    const res = await fetch(CONFIG.GOSU_DONE_URL, {
+      method: "POST",
+      body,
+      credentials: "include",
+      keepalive: true,
+      signal: ctrl.signal
+    });
+    if (!res.ok) console.warn("gosu done post status", res.status);
+    return res.ok;
+  } catch (err) {
+    console.warn("gosu done post failed", err);
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function notifyChatbot() {
+  await postDoneToGosu();
   const note = document.getElementById("doneBody");
   const canSend = window.liff && CONFIG.LIFF_ID && liff.isInClient() && liff.isApiAvailable("sendMessages");
   if (!canSend) {
