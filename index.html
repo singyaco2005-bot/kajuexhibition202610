@@ -446,21 +446,14 @@ async function postDoneToGosu() {
   }
 }
 
+/* 作答完成 → 只用 API 通知 gosu（不再從聊天室送關鍵字） */
 async function notifyChatbot() {
-  await postDoneToGosu();
-  const note = document.getElementById("doneBody");
-  const canSend = window.liff && CONFIG.LIFF_ID && liff.isInClient() && liff.isApiAvailable("sendMessages");
-  if (!canSend) {
-    // 在外部瀏覽器開啟，或不是從聊天室開的 LIFF，無法代傳訊息
-    if (CONFIG.LIFF_ID) note.textContent = t("backToChat").replace("{kw}", CONFIG.DONE_KEYWORD);
-    return;
-  }
-  try {
-    await liff.sendMessages([{ type: "text", text: CONFIG.DONE_KEYWORD }]);
-    if (CONFIG.AUTO_CLOSE_MS) setTimeout(() => liff.closeWindow(), CONFIG.AUTO_CLOSE_MS);
-  } catch (err) {
-    console.error("sendMessages failed", err); // 常見原因：LIFF 沒勾 chat_message.write
-    note.textContent = t("backToChat").replace("{kw}", CONFIG.DONE_KEYWORD);
+  const ok = await postDoneToGosu();
+  // 在 LINE 內開啟且通知成功 → 幾秒後自動關閉 LIFF
+  if (ok && CONFIG.AUTO_CLOSE_MS && window.liff && CONFIG.LIFF_ID) {
+    try {
+      if (liff.isInClient()) setTimeout(() => liff.closeWindow(), CONFIG.AUTO_CLOSE_MS);
+    } catch (e) {}
   }
 }
 
