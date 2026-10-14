@@ -232,7 +232,7 @@ const CONFIG = {
   LIFF_ID: "1654296704-ve03OHtm",        // ← 填入 LIFF ID，例如 "2001234567-AbCdEfGh"
   // gosu LINE Login：讀取已登入使用者資料的 API（從 gosu 登入連結進來時使用）
   GOSU_ME_URL: "https://1935.api.gosu.bar/oauth/line/logged",
-  // 作答完成後 POST 回 gosu（自訂事件 POST），由 gosu 流程「設定屬性」貼標籤
+  // 作答完成後打開此 gosu 網址（自訂事件 GET、檢查登入狀態），由 gosu 流程貼標籤、發訊息、導回聊天室
   GOSU_DONE_URL: "https://1935.api.gosu.bar/customize/kajuexhibition202610-done",
   // 填寫完成後，以使用者身分傳到聊天室給 chatbot 的關鍵字（不分中日文，固定一個方便 chatbot 判斷）
   DONE_KEYWORD: "#菓樹問答完成",
@@ -446,15 +446,20 @@ async function postDoneToGosu() {
   }
 }
 
-/* 作答完成 → 只用 API 通知 gosu（不再從聊天室送關鍵字） */
+/* 作答完成 → 直接打開 gosu 完成網址（GET + 檢查登入狀態），
+   gosu 流程會貼標籤、跑決策點發訊息，再用 307 把使用者帶回 LINE 聊天室 */
 async function notifyChatbot() {
-  const ok = await postDoneToGosu();
-  // 在 LINE 內開啟且通知成功 → 幾秒後自動關閉 LIFF
-  if (ok && CONFIG.AUTO_CLOSE_MS && window.liff && CONFIG.LIFF_ID) {
-    try {
-      if (liff.isInClient()) setTimeout(() => liff.closeWindow(), CONFIG.AUTO_CLOSE_MS);
-    } catch (e) {}
-  }
+  if (!CONFIG.GOSU_DONE_URL) return;
+  const params = new URLSearchParams({
+    id: profile.gosuId || GOSU_ID || "",
+    lineUserId: profile.userId || "",
+    result: typeof doneState !== "undefined" ? doneState : "ok",
+    lang: typeof lang !== "undefined" ? lang : "",
+    answers: JSON.stringify(typeof answers !== "undefined" ? answers : {})
+  });
+  const url = CONFIG.GOSU_DONE_URL + "?" + params.toString();
+  // 先讓使用者看到完成畫面，再跳轉
+  setTimeout(() => { location.href = url; }, CONFIG.AUTO_CLOSE_MS || 0);
 }
 
 /* ================= 初始化 ================= */
