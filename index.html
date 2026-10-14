@@ -446,6 +446,13 @@ async function postDoneToGosu() {
   }
 }
 
+/* 填寫時間（台灣時間，格式 2026-10-14 08:30:15） */
+function taipeiNow() {
+  const d = new Date(Date.now() + 8 * 3600 * 1000);
+  const p = n => String(n).padStart(2, "0");
+  return d.getUTCFullYear() + "-" + p(d.getUTCMonth() + 1) + "-" + p(d.getUTCDate()) + " " + p(d.getUTCHours()) + ":" + p(d.getUTCMinutes()) + ":" + p(d.getUTCSeconds());
+}
+
 /* 作答完成 → 直接打開 gosu 完成網址（GET + 檢查登入狀態），
    gosu 流程會貼標籤、跑決策點發訊息，再用 307 把使用者帶回 LINE 聊天室 */
 async function notifyChatbot() {
@@ -455,7 +462,8 @@ async function notifyChatbot() {
     lineUserId: profile.userId || "",
     result: typeof doneState !== "undefined" ? doneState : "ok",
     lang: typeof lang !== "undefined" ? lang : "",
-    answers: JSON.stringify(typeof answers !== "undefined" ? answers : {})
+    answers: JSON.stringify(typeof answers !== "undefined" ? answers : {}),
+    finishedAt: taipeiNow()
   });
   const url = CONFIG.GOSU_DONE_URL + "?" + params.toString();
   // 先讓使用者看到完成畫面，再跳轉
